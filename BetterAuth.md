@@ -3,9 +3,9 @@
 ## A. Instalación de Dependencias
 Necesitas el paquete principal de BetterAuth, los adaptadores para Next.js y React, y las herramientas de base de datos (usaremos Prisma como ejemplo).
 ```
-pnpm install better-auth better-auth/next-js better-auth/react
-pnpm install @prisma/client prisma
-pnpm install -D typescript @types/node ts-node # Si no los tienes ya
+pnpm add better-auth
+pnpm add @prisma/client
+pnpm add -D prisma
 ```
 
 ## B. Configuración de Prisma y la Base de Datos
@@ -215,3 +215,54 @@ presiontamos probar conexion
 
 Si funciona aquí, Prisma también debería conectarse.
 ______________
+# A pesar de que el comando pnpm dlx prisma generate se ejecutó correctamente, el error Module '"@prisma/client"' has no exported member 'PrismaClient'. significa que TypeScript aún no está reconociendo la nueva ubicación del cliente generado.
+
+Esto es muy común en proyectos que usan pnpm y monorepos (aunque tu estructura no lo sea) o cuando la caché de módulos de Node.js o TypeScript está desactualizada.
+
+Aquí tienes el plan de acción para forzar la actualización y que TypeScript reconozca el nuevo código generado:
+
+## 🛠️ Solución Definitiva al Problema de Caché
+### 1. Limpiar e Instalar Dependencias
+Lo más probable es que pnpm haya guardado la versión antigua o incompleta del módulo antes de la última generación.
+
+1. Elimina la carpeta de caché y reinstala:
+
+```
+pnpm uninstall @prisma/client # Desinstala el cliente actual
+pnpm install @prisma/client  # Reinstala la versión correcta
+```
+2. Vuelve a generar el cliente:
+```
+pnpm dlx prisma generate
+```
+
+
+# 🛠️ Retomando el Manual de BetterAuth
+Ya completamos los pasos de configuración y migración. Ahora nos enfocaremos en los tres archivos clave en tu código:
+
+Paso 1: Crear el Cliente de Prisma (/lib/prisma.ts)
+Necesitas una instancia única y reutilizable de tu cliente de Prisma para que BetterAuth pueda usarlo como adaptador de base de datos.
+
+TypeScript
+```
+// /lib/prisma.ts
+
+import { PrismaClient } from "@prisma/client";
+
+// Evita crear múltiples instancias de PrismaClient en desarrollo (hot-reloading)
+const prismaClientSingleton = () => {
+  // 💡 NOTA: En producción, el cliente se conectará a la DATABASE_URL (el pooler)
+  return new PrismaClient(); 
+};
+
+// Declaración global para almacenar la instancia
+declare global {
+  var prisma: undefined | ReturnType<typeof prismaClientSingleton>;
+}
+
+// Exporta la única instancia del cliente
+export const prisma = globalThis.prisma ?? prismaClientSingleton();
+
+// En desarrollo, reusa la instancia global
+if (process.env.NODE_ENV !== "production") globalThis.prisma = prisma;
+```
